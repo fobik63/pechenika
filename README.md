@@ -3,8 +3,8 @@
 Windows screen clicker with YOLO detection. The app expects a four-class ONNX
 model at `weights/best.onnx`: `game`, `ads_close`, `upgrade`, `bonus` in that
 order. Ad close buttons and bonuses take priority over upgrades and the main
-cookie. Each class has its own click cooldown. Press **Space** to stop; moving
-the cursor to a screen corner also triggers PyAutoGUI's fail-safe.
+cookie. Each class has its own click cooldown. Press **Space** to pause or resume;
+moving the cursor to a screen corner triggers PyAutoGUI's fail-safe.
 
 ## Run
 
@@ -13,7 +13,7 @@ Install Python 3.12, then:
 ```powershell
 py -3.12 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python app.py --confidence 0.45 --upgrade-cooldown 2
+.venv\Scripts\python app.py --confidence 0.45 --upgrade-cooldown 8
 ```
 
 The supplied `weights/best.onnx` was trained for 20 epochs on the local data.
@@ -25,6 +25,8 @@ rejects models whose class names or order differ from `data.yaml`.
 Use `--monitor 0` to capture all monitors instead of the first monitor.
 Lower `--confidence` cautiously if small upgrades are missed; 0.30 found
 9 upgrade detections on the current validation images versus 7 at 0.45.
+The default upgrade cooldown is 8 seconds. Cookie clicks continue while an
+upgrade is cooling down. Press Ctrl+C to exit.
 
 ## Train on local data
 

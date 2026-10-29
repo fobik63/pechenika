@@ -1,4 +1,4 @@
-"""Clicker driven by a four-class YOLO ONNX model. Press Space to stop."""
+"""Clicker driven by a four-class YOLO ONNX model. Press Space to pause or resume."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class Config:
     image_size: int = 640
     poll_interval: float = 0.08
     game_cooldown: float = 0.12
-    upgrade_cooldown: float = 2.0
+    upgrade_cooldown: float = 8.0
     ads_close_cooldown: float = 0.7
     bonus_cooldown: float = 0.5
 
@@ -45,6 +45,12 @@ class Detection:
 
 def space_pressed() -> bool:
     return bool(ctypes.windll.user32.GetAsyncKeyState(0x20) & 0x8000)
+
+
+def toggle_pause(paused: bool, was_pressed: bool, pressed: bool) -> tuple[bool, bool, bool]:
+    """Return (paused, key_down, changed), toggling once per physical key press."""
+    changed = pressed and not was_pressed
+    return (not paused if changed else paused), pressed, changed
 
 
 def letterbox(image: np.ndarray, size: int) -> tuple[np.ndarray, float, int, int]:
@@ -154,6 +160,8 @@ def choose_target(detections: list[Detection], last_click: dict[str, float],
         matches = [item for item in detections if item.name == name]
         if matches:
             if now - last_click.get(name, -float("inf")) < cooldowns[name]:
+                if name == "upgrade":
+                    continue
                 return None
             return max(matches, key=lambda item: item.confidence)
     return None
@@ -163,17 +171,28 @@ def run(config: Config) -> None:
     detector = Detector(config)
     last_click: dict[str, float] = {}
     pyautogui.FAILSAFE = True
-    print("Running. Press Space to stop; move mouse to a corner for emergency stop.")
+    print("Running. Press Space to pause/resume; move mouse to a corner to stop.")
+    paused = False
+    was_pressed = False
     with mss.mss() as capture:
         if not 0 <= config.monitor < len(capture.monitors):
             raise ValueError(f"Monitor {config.monitor} unavailable; choose 0..{len(capture.monitors) - 1}")
         monitor = capture.monitors[config.monitor]
-        while not space_pressed():
+        while True:
+            paused, was_pressed, changed = toggle_pause(paused, was_pressed, space_pressed())
+            if changed:
+                print("Paused." if paused else "Resumed.")
+            if paused:
+                time.sleep(config.poll_interval)
+                continue
             frame = np.asarray(capture.grab(monitor))[:, :, :3]
             target = choose_target(
                 detector.detect(frame, monitor), last_click, time.monotonic(), config
             )
-            if target is not None and not space_pressed():
+            paused, was_pressed, changed = toggle_pause(paused, was_pressed, space_pressed())
+            if changed:
+                print("Paused." if paused else "Resumed.")
+            if target is not None and not paused and not space_pressed():
                 pyautogui.click(target.x, target.y)
                 last_click[target.name] = time.monotonic()
             time.sleep(config.poll_interval)
