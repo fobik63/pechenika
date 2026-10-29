@@ -1,6 +1,8 @@
 path: ./
 train: images/train
 val: images/val
-
-nc: 1
-names: ['name']
+names:
+  0: game
+  1: ads_close
+  2: upgrade
+  3: bonus

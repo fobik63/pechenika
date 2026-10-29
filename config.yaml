@@ -1,8 +1,11 @@
 type: yolov8
-name: MySuperCookerDetector
-display_name: EvgenSuperTeacherS
-model_path: ./best.onnx
+name: CookieDetector
+display_name: Cookie Detector
+model_path: ./weights/best.onnx
 nms_threshold: 0.45
-confidence_threshold: 0.25
+confidence_threshold: 0.45
 classes:
   - game
+  - ads_close
+  - upgrade
+  - bonus

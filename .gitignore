@@ -1,0 +1,24 @@
+# Local training data and generated output
+/images/
+/labels/
+/screenshots/
+/screenshots_augmented/
+/itog/
+/skrin/
+/runs/
+/dataset_unmatched/
+/dataset_staging/
+/.venv/
+/.venv*/
+/.python/
+/.uv-cache/
+/__pycache__/
+*.py[cod]
+*.cache
+/.pytest_cache/
+
+# Keep only the exported deployment model
+*.pt
+/best.onnx
+/weights/*
+!/weights/best.onnx
