@@ -16,8 +16,15 @@ py -3.12 -m venv .venv
 .venv\Scripts\python app.py --confidence 0.45 --upgrade-cooldown 2
 ```
 
-The supplied `weights/best.onnx` is an older **one-class** model. The app
-rejects it until a four-class model is exported, preventing unsafe clicks.
+The supplied `weights/best.onnx` was trained for 20 epochs on the local data.
+Its output has four class slots, but only `game`, `ads_close` and `upgrade`
+had training examples. On the 60-image validation split, ONNX mAP50 was 0.896
+across those three classes. `bonus` is **not learned** yet. The detector
+rejects models whose class names or order differ from `data.yaml`.
+
+Use `--monitor 0` to capture all monitors instead of the first monitor.
+Lower `--confidence` cautiously if small upgrades are missed; 0.30 found
+9 upgrade detections on the current validation images versus 7 at 0.45.
 
 ## Train on local data
 
@@ -40,3 +47,6 @@ has 295 pairs and no overlap between screenshot groups, but no `bonus` labels.
 best ONNX model to `weights/best.onnx`. Training output and the private
 dataset stay ignored by Git. Check detections on the actual game before
 leaving the clicker unattended.
+
+Until `bonus` annotations are added, `train.py --allow-missing-bonus` can
+refresh the provisional model for the three labelled classes.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import ctypes
 import time
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ PRIORITY = ("ads_close", "bonus", "upgrade", "game")
 @dataclass(frozen=True)
 class Config:
     model: Path = ROOT / "weights" / "best.onnx"
+    monitor: int = 1
     confidence: float = 0.45
     nms_threshold: float = 0.45
     image_size: int = 640
@@ -76,10 +78,15 @@ class Detector:
             self.image_size = config.image_size
         metadata = self.session.get_modelmeta().custom_metadata_map
         names = metadata.get("names", "")
-        if names and any(name not in names for name in CLASSES):
+        try:
+            parsed = ast.literal_eval(names)
+            ordered = tuple(parsed[i] for i in range(len(CLASSES)))
+        except (ValueError, SyntaxError, KeyError, IndexError, TypeError) as exc:
+            raise ValueError(f"ONNX model has invalid class metadata: {names}") from exc
+        if ordered != CLASSES:
             raise ValueError(
-                f"Model classes {names} do not contain {CLASSES}. "
-                "Label missing classes, retrain, and export weights/best.onnx."
+                f"Model classes {ordered} do not match {CLASSES}. "
+                "Retrain and export weights/best.onnx."
             )
 
     def detect(self, image: np.ndarray, monitor: dict) -> list[Detection]:
@@ -158,7 +165,9 @@ def run(config: Config) -> None:
     pyautogui.FAILSAFE = True
     print("Running. Press Space to stop; move mouse to a corner for emergency stop.")
     with mss.mss() as capture:
-        monitor = capture.monitors[0]
+        if not 0 <= config.monitor < len(capture.monitors):
+            raise ValueError(f"Monitor {config.monitor} unavailable; choose 0..{len(capture.monitors) - 1}")
+        monitor = capture.monitors[config.monitor]
         while not space_pressed():
             frame = np.asarray(capture.grab(monitor))[:, :, :3]
             target = choose_target(
@@ -174,12 +183,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, default=Config.model)
     parser.add_argument("--confidence", type=float, default=Config.confidence)
+    parser.add_argument("--monitor", type=int, default=Config.monitor)
     parser.add_argument("--upgrade-cooldown", type=float, default=Config.upgrade_cooldown)
     args = parser.parse_args()
     if not 0 < args.confidence <= 1 or args.upgrade_cooldown < 0:
         parser.error("confidence must be in (0, 1]; cooldown must be nonnegative")
     config = Config(
-        model=args.model, confidence=args.confidence,
+        model=args.model, monitor=args.monitor, confidence=args.confidence,
         upgrade_cooldown=args.upgrade_cooldown,
     )
     try:

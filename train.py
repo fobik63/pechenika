@@ -1,5 +1,6 @@
 """Validate local data, train YOLO, and export the best model to ONNX."""
 
+import argparse
 from pathlib import Path
 from shutil import copy2
 
@@ -10,14 +11,20 @@ ROOT = Path(__file__).resolve().parent
 
 
 def main() -> None:
-    validate(ROOT, require_all_classes=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--allow-missing-bonus", action="store_true")
+    args = parser.parse_args()
+    counts = validate(ROOT, require_all_classes=not args.allow_missing_bonus)
+    if args.allow_missing_bonus and any(not counts[name] for name in ("game", "ads_close", "upgrade")):
+        raise ValueError("game, ads_close and upgrade still require annotations")
     from ultralytics import YOLO
 
     base = ROOT / "yolov8n.pt"
     model = YOLO(str(base if base.is_file() else "yolov8n.pt"))
     model.train(
         data=str(ROOT / "data.yaml"),
-        epochs=100,
+        epochs=args.epochs,
         imgsz=640,
         batch=16,
         workers=0,
