@@ -1,0 +1,8 @@
+type: yolov8
+name: MySuperCookerDetector
+display_name: EvgenSuperTeacherS
+model_path: ./best.onnx
+nms_threshold: 0.45
+confidence_threshold: 0.25
+classes:
+  - game
