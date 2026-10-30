@@ -13,11 +13,8 @@ ROOT = Path(__file__).resolve().parent
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--allow-missing-bonus", action="store_true")
     args = parser.parse_args()
-    counts = validate(ROOT, require_all_classes=not args.allow_missing_bonus)
-    if args.allow_missing_bonus and any(not counts[name] for name in ("game", "ads_close", "upgrade")):
-        raise ValueError("game, ads_close and upgrade still require annotations")
+    validate(ROOT, require_all_classes=True)
     from ultralytics import YOLO
 
     base = ROOT / "yolov8n.pt"
@@ -28,12 +25,12 @@ def main() -> None:
         imgsz=640,
         batch=16,
         workers=0,
-        name="cookie_detector",
+        name="cookie_three_class",
         patience=30,
         project=str(ROOT / "runs" / "detect"),
         exist_ok=True,
     )
-    best = ROOT / "runs" / "detect" / "cookie_detector" / "weights" / "best.pt"
+    best = ROOT / "runs" / "detect" / "cookie_three_class" / "weights" / "best.pt"
     exported = Path(YOLO(str(best)).export(format="onnx", opset=12, simplify=False))
     target = ROOT / "weights" / "best.onnx"
     target.parent.mkdir(exist_ok=True)

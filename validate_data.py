@@ -4,7 +4,7 @@ from collections import Counter
 from pathlib import Path
 
 
-CLASSES = ("game", "ads_close", "upgrade", "bonus")
+CLASSES = ("game", "ads_close", "upgrade")
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
