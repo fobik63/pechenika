@@ -41,6 +41,15 @@ def choose_target(detections: list[Detection], affordable: list[Detection],
     ads = [item for item in detections if item.name == "ads_close"]
     if ads:
         return max(ads, key=lambda item: item.confidence)
+    # In the existing model, the small X on some ad overlays is tagged as upgrade.
+    # Only treat it as a close button when the overlay has hidden the game.
+    if not affordable and not any(item.name == "game" for item in detections):
+        crosses = [item for item in detections if item.name == "upgrade"
+                   and 10 <= item.box[2] - item.box[0] <= 80
+                   and 10 <= item.box[3] - item.box[1] <= 80]
+        if crosses:
+            cross = max(crosses, key=lambda item: item.confidence)
+            return Detection("ads_close", cross.confidence, cross.box)
     if affordable and now - last_upgrade >= upgrade_cooldown:
         return random.choice(affordable)
     return max((item for item in detections if item.name == "game"),
@@ -201,10 +210,13 @@ def run(model: Path, confidence: float, monitor_index: int, upgrade_cooldown: fl
                 continue
             frame = np.asarray(capture.grab(monitor))[:, :, :3]
             detections = detector.detect(frame, monitor)
-            affordable = ([] if any(item.name == "ads_close" for item in detections)
-                          else affordable_upgrades(frame, monitor))
-            target = choose_target(detections, affordable, last_upgrade,
-                                   time.monotonic(), upgrade_cooldown)
+            if any(item.name == "ads_close" for item in detections):
+                target = choose_target(detections, [], last_upgrade,
+                                       time.monotonic(), upgrade_cooldown)
+            else:
+                affordable = affordable_upgrades(frame, monitor)
+                target = choose_target(detections, affordable, last_upgrade,
+                                       time.monotonic(), upgrade_cooldown)
             paused, was_down = toggle_pause(paused, was_down, space_down())
             if target is not None and not paused:
                 pyautogui.click(*click_point(target))

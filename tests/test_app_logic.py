@@ -34,6 +34,16 @@ class ClickerTests(unittest.TestCase):
             self.assertEqual(choose_target([game], [first, second], 0, 10, 4), second)
         choice.assert_called_once_with([first, second])
 
+    def test_ad_cross_misclassified_as_upgrade(self):
+        cross = Detection("upgrade", 0.9, (330, 310, 355, 340))
+        target = choose_target([cross], [], 10, 11, 4)
+        self.assertEqual(target.name, "ads_close")
+        self.assertEqual(click_point(target), (342, 325))
+
+        shop_row = Detection("upgrade", 1.0, (500, 400, 500, 400))
+        with patch("app.random.choice", return_value=shop_row):
+            self.assertEqual(choose_target([cross], [shop_row], 0, 10, 4), shop_row)
+
     def test_green_shop_price_required(self):
         hsv = np.full((600, 800, 3), (25, 30, 180), dtype=np.uint8)
         image = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
