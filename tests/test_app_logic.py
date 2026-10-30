@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from app import (Detection, affordable_upgrades, choose_target, click_point,
-                 is_close_button_box, toggle_pause)
+                 find_overlay_close, is_close_button_box, toggle_pause)
 
 
 class ClickerTests(unittest.TestCase):
@@ -62,6 +62,17 @@ class ClickerTests(unittest.TestCase):
         self.assertEqual(click_point(Detection("ads_close", 0.9, (100, 20, 120, 40))), (110, 30))
         self.assertTrue(is_close_button_box((100, 20, 120, 40), 1920, 1080))
         self.assertFalse(is_close_button_box((1625, 344, 1935, 625), 2560, 1080))
+
+    def test_overlay_x_is_clicked_not_ad_card(self):
+        frame = np.full((720, 1280, 3), (25, 35, 45), dtype=np.uint8)
+        cv2.rectangle(frame, (300, 230), (900, 550), (245, 245, 245), -1)
+        cv2.circle(frame, (925, 205), 20, (105, 105, 110), -1)
+        cv2.line(frame, (918, 198), (932, 212), (255, 255, 255), 3)
+        cv2.line(frame, (932, 198), (918, 212), (255, 255, 255), 3)
+        monitor = {"left": 100, "top": 50}
+        self.assertEqual(click_point(find_overlay_close(frame, monitor)), (1025, 255))
+        cv2.circle(frame, (925, 205), 20, (105, 105, 110), -1)
+        self.assertIsNone(find_overlay_close(frame, monitor))
 
 
 if __name__ == "__main__":

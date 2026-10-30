@@ -42,6 +42,50 @@ def is_close_button_box(box: tuple[int, int, int, int],
     return 0 < x2 - x1 <= frame_width * 0.1 and 0 < y2 - y1 <= frame_height * 0.1
 
 
+def find_overlay_close(image: np.ndarray, monitor: dict) -> Detection | None:
+    """Find the white X in Yandex's grey circular button beside a modal ad."""
+    height, width = image.shape[:2]
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    pale = cv2.inRange(hsv, (0, 0, 200), (179, 75, 255))
+    _, _, cards, _ = cv2.connectedComponentsWithStats(pale)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    for x, y, card_width, card_height, area in sorted(cards[1:], key=lambda row: row[4], reverse=True):
+        if (card_width < width * 0.15 or card_height < height * 0.12
+                or area < card_width * card_height * 0.12):
+            continue
+        rx1 = max(0, round(x + card_width * 0.92))
+        ry1 = max(0, round(y - card_height * 0.18))
+        rx2 = min(width, round(x + card_width * 1.10))
+        ry2 = min(height, round(y + card_height * 0.06))
+        if rx2 <= rx1 or ry2 <= ry1:
+            continue
+        white = (gray[ry1:ry2, rx1:rx2] > 210).astype(np.uint8)
+        _, _, marks, _ = cv2.connectedComponentsWithStats(white)
+        for mx, my, mark_width, mark_height, mark_area in marks[1:]:
+            if not (8 <= mark_width <= card_height * 0.10
+                    and 8 <= mark_height <= card_height * 0.10
+                    and 0.2 <= mark_area / (mark_width * mark_height) <= 0.7):
+                continue
+            cx = int(rx1 + mx + mark_width // 2)
+            cy = int(ry1 + my + mark_height // 2)
+            step = max(3, round(min(mark_width, mark_height) * 0.3))
+            ring = max(6, round(max(mark_width, mark_height) * 0.8))
+            if not (ring <= cx < width - ring and ring <= cy < height - ring):
+                continue
+            diagonal = [gray[cy + dy, cx + dx] for dx, dy in
+                        ((-step, -step), (step, -step), (-step, step), (step, step))]
+            axes = [gray[cy + dy, cx + dx] for dx, dy in
+                    ((-step, 0), (step, 0), (0, -step), (0, step))]
+            circle = [gray[cy + dy, cx + dx] for dx, dy in
+                      ((-ring, 0), (ring, 0), (0, -ring), (0, ring))]
+            if (np.mean(diagonal) > 185 and np.mean(diagonal) - np.mean(axes) > 55
+                    and all(65 < value < 190 for value in circle)):
+                sx = monitor["left"] + cx
+                sy = monitor["top"] + cy
+                return Detection("ads_close", 1.0, (sx - 2, sy - 2, sx + 2, sy + 2))
+    return None
+
+
 def choose_target(detections: list[Detection], affordable: list[Detection],
                   last_upgrade: float, now: float, upgrade_cooldown: float) -> Detection | None:
     ads = [item for item in detections if item.name == "ads_close"]
@@ -219,13 +263,17 @@ def run(model: Path, confidence: float, monitor_index: int, upgrade_cooldown: fl
                 time.sleep(0.08)
                 continue
             frame = np.asarray(capture.grab(monitor))[:, :, :3]
-            detections = detector.detect(frame, monitor)
-            if any(item.name == "ads_close" for item in detections):
-                target = choose_target(detections, [], last_upgrade,
-                                       time.monotonic(), upgrade_cooldown)
+            overlay_close = find_overlay_close(frame, monitor)
+            if overlay_close is not None:
+                target = overlay_close
             else:
-                affordable = affordable_upgrades(frame, monitor)
-                target = choose_target(detections, affordable, last_upgrade,
+                detections = detector.detect(frame, monitor)
+                if any(item.name == "ads_close" for item in detections):
+                    target = choose_target(detections, [], last_upgrade,
+                                       time.monotonic(), upgrade_cooldown)
+                else:
+                    affordable = affordable_upgrades(frame, monitor)
+                    target = choose_target(detections, affordable, last_upgrade,
                                        time.monotonic(), upgrade_cooldown)
             paused, was_down = toggle_pause(paused, was_down, space_down())
             if target is not None and not paused:

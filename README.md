@@ -6,6 +6,8 @@ then an available upgrade, then the main cookie. The model sometimes labels a
 whole side banner as `ads_close`; the app only clicks small close-button boxes.
 Some modal close buttons are emitted as `upgrade`; when the overlay hides the
 cookie, those small boxes are handled as ad close buttons before shop checks.
+For Yandex's white modal ad card, the app also finds the grey round `×` button
+directly in the screenshot, so closing still works when ONNX returns no boxes.
 Before buying, the app checks the shop's price state in the screenshot: green
 prices are affordable, red prices are skipped. It randomly picks one affordable
 row and keeps farming when none is available. The pixel check follows the
