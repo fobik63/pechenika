@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import ast
 import ctypes
+import random
 import sys
 import time
 from dataclasses import dataclass
@@ -35,16 +36,63 @@ def click_point(detection: Detection) -> tuple[int, int]:
     return (x1 + x2) // 2, (y1 + y2) // 2
 
 
-def choose_target(detections: list[Detection], last_upgrade: float,
-                  now: float, upgrade_cooldown: float) -> Detection | None:
-    for name in ("ads_close", "upgrade", "game"):
-        if name == "upgrade" and now - last_upgrade < upgrade_cooldown:
+def choose_target(detections: list[Detection], affordable: list[Detection],
+                  last_upgrade: float, now: float, upgrade_cooldown: float) -> Detection | None:
+    ads = [item for item in detections if item.name == "ads_close"]
+    if ads:
+        return max(ads, key=lambda item: item.confidence)
+    if affordable and now - last_upgrade >= upgrade_cooldown:
+        return random.choice(affordable)
+    return max((item for item in detections if item.name == "game"),
+               key=lambda item: item.confidence, default=None)
+
+
+def price_boxes(mask: np.ndarray) -> list[tuple[int, int, int, int]]:
+    # Join adjacent digits into one price without joining separate shop rows.
+    joined = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_RECT, (5, 3)))
+    _, _, stats, _ = cv2.connectedComponentsWithStats(joined)
+    boxes = []
+    for x, y, width, height, _ in stats[1:]:
+        if (5 <= width <= 100 and 7 <= height <= 35
+                and np.count_nonzero(mask[y:y + height, x:x + width]) >= 15):
+            boxes.append((int(x), int(y), int(width), int(height)))
+    return boxes
+
+
+def affordable_upgrades(image: np.ndarray, monitor: dict) -> list[Detection]:
+    """Use the game's green price state; red prices mean insufficient cookies."""
+    height, width = image.shape[:2]
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    green = cv2.inRange(hsv, (35, 90, 80), (85, 255, 255))
+    red = cv2.bitwise_or(cv2.inRange(hsv, (0, 90, 70), (10, 255, 255)),
+                         cv2.inRange(hsv, (170, 90, 70), (179, 255, 255)))
+    green_boxes = price_boxes(green)
+    all_prices = green_boxes + price_boxes(red)
+    found = []
+    for x, y, _, glyph_height in green_boxes:
+        scale = glyph_height / 12
+        click_x = round(x + 110 * scale)
+        click_y = round(y - 20 * scale)
+        if not (5 <= click_x < width - 5 and 5 <= click_y < height - 5):
             continue
-        target = max((item for item in detections if item.name == name),
-                     key=lambda item: item.confidence, default=None)
-        if target is not None:
-            return target
-    return None
+        # Shop prices occur in stacked rows on pale stone; tooltip/ad text does not.
+        nearby_row = any(
+            abs(other_x - x) <= 30 * scale
+            and 55 * scale <= abs(other_y - y) <= 90 * scale
+            for other_x, other_y, _, _ in all_prices
+        )
+        if not nearby_row:
+            continue
+        background = hsv[click_y - 5:click_y + 5, click_x - 5:click_x + 5].mean(axis=(0, 1))
+        if not (10 <= background[0] <= 45 and background[1] < 65
+                and 100 < background[2] < 220):
+            continue
+        screen_x = monitor["left"] + click_x
+        screen_y = monitor["top"] + click_y
+        if all(abs(item.box[0] - screen_x) > 25 or abs(item.box[1] - screen_y) > 25 for item in found):
+            found.append(Detection("upgrade", 1.0,
+                                   (screen_x, screen_y, screen_x, screen_y)))
+    return found
 
 
 def space_down() -> bool:
@@ -152,7 +200,10 @@ def run(model: Path, confidence: float, monitor_index: int, upgrade_cooldown: fl
                 time.sleep(0.08)
                 continue
             frame = np.asarray(capture.grab(monitor))[:, :, :3]
-            target = choose_target(detector.detect(frame, monitor), last_upgrade,
+            detections = detector.detect(frame, monitor)
+            affordable = ([] if any(item.name == "ads_close" for item in detections)
+                          else affordable_upgrades(frame, monitor))
+            target = choose_target(detections, affordable, last_upgrade,
                                    time.monotonic(), upgrade_cooldown)
             paused, was_down = toggle_pause(paused, was_down, space_down())
             if target is not None and not paused:
