@@ -17,10 +17,19 @@ default Cookie Clicker Old shop colors shown in the local screenshots.
 
 Install Python 3.12, then in PowerShell:
 
-```powershell
-py -3.12 -m venv .venv
-.venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python app.py --confidence 0.4 --upgrade-cooldown 4
+```
+в app.py на 158 строке сделать
+return pyautogui.keyDown("space")
+
+
+python3 -m venv venv
+source venv/bin/activate
+pip install opencv-python
+pip install pyautogui
+pip install mss
+pip install onnxruntime
+python app.py
+
 ```
 
 **Space** pauses or resumes. **Ctrl+C** exits. Moving the mouse to a screen
