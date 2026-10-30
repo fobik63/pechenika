@@ -36,6 +36,12 @@ def click_point(detection: Detection) -> tuple[int, int]:
     return (x1 + x2) // 2, (y1 + y2) // 2
 
 
+def is_close_button_box(box: tuple[int, int, int, int],
+                        frame_width: int, frame_height: int) -> bool:
+    x1, y1, x2, y2 = box
+    return 0 < x2 - x1 <= frame_width * 0.1 and 0 < y2 - y1 <= frame_height * 0.1
+
+
 def choose_target(detections: list[Detection], affordable: list[Detection],
                   last_upgrade: float, now: float, upgrade_cooldown: float) -> Detection | None:
     ads = [item for item in detections if item.name == "ads_close"]
@@ -43,7 +49,7 @@ def choose_target(detections: list[Detection], affordable: list[Detection],
         return max(ads, key=lambda item: item.confidence)
     # In the existing model, the small X on some ad overlays is tagged as upgrade.
     # Only treat it as a close button when the overlay has hidden the game.
-    if not affordable and not any(item.name == "game" for item in detections):
+    if not any(item.name == "game" for item in detections):
         crosses = [item for item in detections if item.name == "upgrade"
                    and 10 <= item.box[2] - item.box[0] <= 80
                    and 10 <= item.box[3] - item.box[1] <= 80]
@@ -186,6 +192,10 @@ class Detector:
             for local_index in np.array(kept).reshape(-1):
                 index = indices[int(local_index)]
                 x, y, box_width, box_height = boxes[index]
+                if class_id == 1 and not is_close_button_box(
+                    (x, y, x + box_width, y + box_height), width, height
+                ):
+                    continue  # The model also calls whole side banners ads_close.
                 screen_x, screen_y = monitor["left"] + x, monitor["top"] + y
                 detections.append(Detection(CLASSES[class_id], scores[index],
                                             (screen_x, screen_y, screen_x + box_width, screen_y + box_height)))

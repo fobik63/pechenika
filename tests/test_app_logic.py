@@ -4,7 +4,8 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
-from app import Detection, affordable_upgrades, choose_target, click_point, toggle_pause
+from app import (Detection, affordable_upgrades, choose_target, click_point,
+                 is_close_button_box, toggle_pause)
 
 
 class ClickerTests(unittest.TestCase):
@@ -41,8 +42,10 @@ class ClickerTests(unittest.TestCase):
         self.assertEqual(click_point(target), (342, 325))
 
         shop_row = Detection("upgrade", 1.0, (500, 400, 500, 400))
+        self.assertEqual(choose_target([cross], [shop_row], 0, 10, 4).name, "ads_close")
+        game = Detection("game", 0.9, (10, 10, 30, 30))
         with patch("app.random.choice", return_value=shop_row):
-            self.assertEqual(choose_target([cross], [shop_row], 0, 10, 4), shop_row)
+            self.assertEqual(choose_target([game, cross], [shop_row], 0, 10, 4), shop_row)
 
     def test_green_shop_price_required(self):
         hsv = np.full((600, 800, 3), (25, 30, 180), dtype=np.uint8)
@@ -56,8 +59,9 @@ class ClickerTests(unittest.TestCase):
         self.assertEqual(len(affordable_upgrades(image, monitor)), 1)
 
     def test_ad_click_point(self):
-        self.assertEqual(click_point(Detection("ads_close", 0.9, (100, 20, 200, 120))), (190, 30))
         self.assertEqual(click_point(Detection("ads_close", 0.9, (100, 20, 120, 40))), (110, 30))
+        self.assertTrue(is_close_button_box((100, 20, 120, 40), 1920, 1080))
+        self.assertFalse(is_close_button_box((1625, 344, 1935, 625), 2560, 1080))
 
 
 if __name__ == "__main__":
